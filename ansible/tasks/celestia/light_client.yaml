@@ -1,0 +1,107 @@
+######################################################################################################
+# Create directory structure, permissions and users
+######################################################################################################
+- name: Check if a directory exists
+  ansible.builtin.stat:
+    path: '{{ da_home_dir }}'
+  register: da_home_dir_status
+- name: Print message if directory exists
+  ansible.builtin.debug:
+    msg: '{{ da_home_dir }} already exists, skipping initialization'
+  when: da_home_dir_status.stat.isdir is defined and da_home_dir_status.stat.isdir
+- name: Create da home directory
+  ansible.builtin.file:
+    path: '{{ da_home_dir }}'
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  when: not da_home_dir_status.stat.exists or not da_home_dir_status.stat.isdir
+- name: Add da group
+  ansible.builtin.group:
+    name: da
+    state: present
+- name: Add da user
+  ansible.builtin.user:
+    name: da
+    system: true
+    home: /sbin/nologin
+    shell: /sbin/nologin
+    groups: da
+    append: true
+- name: Set ownership for da directory
+  ansible.builtin.file:
+    path: '{{ da_home_dir }}'
+    state: directory
+    owner: da
+    group: da
+    recurse: true
+- name: Set default ACLs for da user on rollapp directory
+  ansible.posix.acl:
+    path: '{{ da_home_dir }}'
+    entity: da
+    etype: user
+    permissions: rwx
+    state: present
+    default: true
+- name: Set access ACLs for da user on rollapp directory
+  ansible.posix.acl:
+    path: '{{ da_home_dir }}'
+    entity: da
+    etype: user
+    permissions: rwx
+    state: present
+- name: Set default ACLs for da user on /tmp
+  ansible.posix.acl:
+    path: /tmp
+    entity: da
+    etype: user
+    permissions: rwx
+    state: present
+    default: true
+- name: Set access ACLs for da user on /tmp
+  ansible.posix.acl:
+    path: /tmp
+    entity: da
+    etype: user
+    permissions: rwx
+    state: present
+######################################################################################################
+# Initialize celestia light client
+######################################################################################################
+- name: Initialize celestia light node
+  ansible.builtin.command: /usr/local/bin/celestia light init --p2p.network {{ celestia_network }} --node.store {{ da_home_dir }}
+  changed_when: false
+- name: Retrieve celestia token
+  ansible.builtin.command: /usr/local/bin/celestia light auth read --p2p.network {{ celestia_network }} --node.store {{ da_home_dir }}
+  register: celestia_token
+  changed_when: false
+- name: Set celestia token environment variable
+  ansible.builtin.lineinfile:
+    path: '{{ ansible_env.HOME }}/.bashrc'
+    line: export CELESTIA_TOKEN={{ celestia_token.stdout }}
+- name: Create systemd service file
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/da.service
+    content: |
+      [Unit]
+      Description=celestia
+      After=network.target
+      [Service]
+      Type=simple
+      User={{ celestia_os_user }}
+      ExecStart=/usr/local/bin/celestia light start --node.store "{{ da_home_dir }}" --gateway --p2p.network {{ celestia_network }}
+      Restart=on-failure
+      RestartSec=10
+      LimitNOFILE=65535
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+- name: Enable a stopped celestia service
+  ansible.builtin.systemd:
+    name: da
+    enabled: true
+    state: stopped

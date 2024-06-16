@@ -1,0 +1,11 @@
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts['hostname'] is not match(".*internal$")
+- name: Install binaries on all groups except jumpbox
+  ansible.builtin.apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  loop: '{{ common_packages }}'

@@ -1,0 +1,47 @@
+# TODO: support different cpu architectures
+- name: Check whether Go is installed
+  ansible.builtin.command: which go
+  register: is_go_installed
+  ignore_errors: true
+  changed_when: false
+- name: Check Go version
+  ansible.builtin.command: go version
+  register: is_go_version_correct
+  ignore_errors: true
+  changed_when: false
+  when: is_go_installed.rc == 0
+- name: Extract version number
+  ansible.builtin.set_fact:
+    current_go_version: '{{ is_go_version_correct.stdout | regex_search("go([0-9]+\.[0-9]+\.[0-9]+)") }}'
+  when: is_go_installed.rc == 0 and is_go_version_correct.rc == 0
+- name: Download Go
+  ansible.builtin.get_url:
+    url: '{{ go_download_url }}'
+    dest: /tmp/{{ go_archive_name }}
+    mode: "0755"
+    timeout: 60 # Increase timeout as needed
+  when: is_go_installed.rc != 0 or current_go_version != 'go' + go_version
+- name: Remove any previous Go installation
+  ansible.builtin.file:
+    path: '{{ go_install_dir }}/go'
+    state: absent
+  when: is_go_installed.rc != 0 or current_go_version != 'go' + go_version
+- name: Extract Go tarball
+  ansible.builtin.unarchive:
+    src: /tmp/{{ go_archive_name }}
+    dest: '{{ go_install_dir }}'
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+  when: is_go_installed.rc != 0 or current_go_version != 'go' + go_version
+- name: Set Go environment variables globally (optional)
+  ansible.builtin.lineinfile:
+    path: /etc/profile.d/goenv.sh
+    create: true
+    mode: "0755"
+    line: '{{ item }}'
+  loop:
+    - export GOROOT={{ go_install_dir }}/go
+    - export GOPATH=$HOME/go
+    - export PATH=$PATH:{{ go_install_dir }}/go/bin:$GOPATH/bin
+  when: is_go_installed.rc != 0 or current_go_version != 'go' + go_version

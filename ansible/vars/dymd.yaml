@@ -1,0 +1,3 @@
+dymd_repository_url: https://github.com/dymensionxyz/dymension.git
+dymd_repo_clone_dir: /tmp/dymd
+dymd_keyring_backend: os

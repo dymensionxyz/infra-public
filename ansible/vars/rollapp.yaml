@@ -1,0 +1,6 @@
+rollapp_home_dir: /etc/rollapp
+rollapp_keyring_backend: test
+rollapp_genesis_path: '{{ rollapp_home_dir }}/config/genesis.json'
+evm_rollapp_repository_url: https://github.com/dymensionxyz/rollapp-evm.git
+wasm_rollapp_repository_url: https://github.com/dymensionxyz/rollapp-wasm.git
+rollapp_repo_clone_dir: /tmp/rollapp

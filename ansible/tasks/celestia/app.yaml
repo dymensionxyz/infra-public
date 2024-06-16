@@ -1,0 +1,55 @@
+# TODO: the binary installation task could be generic assuming
+# there's a common version subcommand
+# a 'make build' command
+# binaries are built into /build directory ( or by creating a build_target variable)
+- name: Check celestia-app binary
+  ansible.builtin.command: which celestia-app
+  register: is_celestia_app_installed
+  ignore_errors: true
+  changed_when: false
+  failed_when: is_celestia_app_installed.rc != 0
+# version
+- name: Check Celestia App version
+  ansible.builtin.command: celestia-app version
+  register: celestia_app_version_output
+  ignore_errors: true
+  changed_when: false
+  when: is_celestia_app_installed.rc == 0
+- name: Extract Celestia semantic version
+  ansible.builtin.set_fact:
+    # it's weird but celestia-app prints the version to stderr
+    # TODO: create a PR to fix this in their repo
+    celestia_app_semantic_version: "{{ celestia_app_version_output.stderr | default('not installed') }}"
+  when: celestia_app_version_output is defined
+- name: Show the celestia node version
+  ansible.builtin.debug:
+    msg: "celestia version want: {{ celestia_app_version }}, have: v{{ celestia_app_semantic_version }}"
+# installation
+- name: Remove the old celestia-app path
+  ansible.builtin.file:
+    path: '{{ celestia_repo_clone_dir }}/celestia-app'
+    state: absent
+  become: true
+  become_method: ansible.builtin.sudo
+  when: celestia_app_version != 'v' + celestia_app_semantic_version or is_celestia_app_installed.rc != 0
+- name: Clone the celestia-app repository at tag ({{ celestia_app_version }})
+  ansible.builtin.git:
+    repo: '{{ celestia_app_repository_url }}'
+    dest: '{{ celestia_repo_clone_dir }}/celestia-app'
+    version: '{{ celestia_app_version }}'
+    clone: true
+    update: true
+  when: celestia_app_version != 'v' + celestia_app_semantic_version or is_celestia_app_installed.rc != 0
+- name: Build the celestia binary
+  ansible.builtin.command:
+    cmd: make build
+    chdir: '{{ celestia_repo_clone_dir }}/celestia-app'
+  when: celestia_app_version != 'v' + celestia_app_semantic_version or is_celestia_app_installed.rc != 0
+  changed_when: false
+- name: Move the binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: '{{ celestia_repo_clone_dir }}/celestia-app/build/celestia-appd'
+    dest: /usr/local/bin/celestia-app
+    remote_src: true
+    mode: "0755"
+  when: celestia_app_version != 'v' + celestia_app_semantic_version or is_celestia_app_installed.rc != 0

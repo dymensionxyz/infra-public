@@ -1,0 +1,62 @@
+# TODO: handle go version that's necessary for the specific celestia binary version
+- name: Check celestia binary
+  ansible.builtin.command: which celestia
+  register: is_celestiad_installed
+  ignore_errors: true
+  changed_when: false
+  failed_when: is_celestiad_installed.rc != 0
+- name: Check Celestia version
+  ansible.builtin.command: celestia version
+  register: celestia_version_output
+  ignore_errors: true
+  changed_when: false
+  when: is_celestiad_installed.rc == 0
+- name: Extract Celestia semantic version
+  ansible.builtin.set_fact:
+    celestia_semantic_version: "{{ celestia_version_output.stdout | regex_search('Semantic version: (v[0-9]+\\.[0-9]+\\.[0-9]+)', '\\1') }}"
+  when: celestia_version_output is defined and is_celestiad_installed.rc == 0
+- name: Show the celestia node version
+  ansible.builtin.debug:
+    msg: "celestia version want: {{ celestia_node_version }}, have: {{ celestia_semantic_version[0] }}"
+  when: celestia_version_output is defined and is_celestiad_installed.rc == 0
+# installation
+- name: Remove the old celestia-node repository directory
+  ansible.builtin.file:
+    path: '{{ celestia_repo_clone_dir }}/celestia'
+    state: absent
+  become: true
+  become_method: ansible.builtin.sudo
+- name: Clone the celestia-node repository at tag ({{ celestia_node_version }})
+  ansible.builtin.git:
+    repo: '{{ celestia_node_repository_url }}'
+    dest: '{{ celestia_repo_clone_dir }}/celestia'
+    version: '{{ celestia_node_version }}'
+    clone: true
+    update: true
+  when: is_celestiad_installed.rc != 0 or celestia_node_version != (celestia_semantic_version[0] | default('not installed'))
+- name: Build the celestia binary
+  ansible.builtin.command:
+    cmd: make build
+    chdir: '{{ celestia_repo_clone_dir }}/celestia'
+  when: is_celestiad_installed.rc != 0 or celestia_node_version != (celestia_semantic_version[0] | default('not installed'))
+  changed_when: false
+- name: Build the cel-key binary
+  ansible.builtin.command:
+    cmd: make cel-key
+    chdir: '{{ celestia_repo_clone_dir }}/celestia'
+  when: is_celestiad_installed.rc != 0 or celestia_node_version != (celestia_semantic_version[0] | default('not installed'))
+  changed_when: false
+- name: Move the celestia binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: '{{ celestia_repo_clone_dir }}/celestia/build/celestia'
+    dest: /usr/local/bin/celestia
+    remote_src: true
+    mode: "0755"
+  when: is_celestiad_installed.rc != 0 or celestia_node_version != (celestia_semantic_version[0] | default('not installed'))
+- name: Move the cel-key binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: '{{ celestia_repo_clone_dir }}/celestia/cel-key'
+    dest: /usr/local/bin/cel-key
+    remote_src: true
+    mode: "0755"
+  when: is_celestiad_installed.rc != 0 or celestia_node_version != (celestia_semantic_version[0] | default('not installed'))

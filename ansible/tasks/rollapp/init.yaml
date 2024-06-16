@@ -1,0 +1,193 @@
+#####################################################################################################
+# Create directory structure, permissions and users
+######################################################################################################
+- name: Check if a directory exists
+  ansible.builtin.stat:
+    path: '{{ rollapp_home_dir }}'
+  register: rollapp_home_dir_status
+- name: Prompt user for removal if the directory exists
+  ansible.builtin.pause:
+    prompt: "The {{ rollapp_home_dir }} exists. Do you want to remove it and initialize the node from scratch? (y/n)"
+  when: rollapp_home_dir_status.stat.exists
+  register: user_input
+- name: Remove the directory if user confirms
+  ansible.builtin.file:
+    path: "{{ rollapp_home_dir }}"
+    state: absent
+  when: rollapp_home_dir_status.stat.exists and (user_input.user_input | lower) in ['y', 'yes']
+- name: Create rollapp home directory
+  ansible.builtin.file:
+    path: '{{ rollapp_home_dir }}'
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Add rollapp group
+  ansible.builtin.group:
+    name: rollapp
+    state: present
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Add rollapp user
+  ansible.builtin.user:
+    name: rollapp
+    system: true
+    home: /sbin/nologin
+    shell: /sbin/nologin
+    groups: rollapp
+    append: true
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Set ownership for rollapp directory
+  ansible.builtin.file:
+    path: '{{ rollapp_home_dir }}'
+    state: directory
+    owner: rollapp
+    group: rollapp
+    recurse: true
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Set default ACLs for rollapp user on rollapp directory
+  ansible.posix.acl:
+    path: '{{ rollapp_home_dir }}'
+    entity: rollapp
+    etype: user
+    permissions: rwx
+    state: present
+    default: true
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Set access ACLs for rollapp user on rollapp directory
+  ansible.posix.acl:
+    path: '{{ rollapp_home_dir }}'
+    entity: rollapp
+    etype: user
+    permissions: rwx
+    state: present
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Set default ACLs for rollapp user on /tmp
+  ansible.posix.acl:
+    path: /tmp
+    entity: rollapp
+    etype: user
+    permissions: rwx
+    state: present
+    default: true
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Set access ACLs for rollapp user on /tmp
+  ansible.posix.acl:
+    path: /tmp
+    entity: rollapp
+    etype: user
+    permissions: rwx
+    state: present
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+######################################################################################################
+# Initialize the rollapp
+######################################################################################################
+- name: Retrieve celestia token
+  ansible.builtin.command: /usr/local/bin/celestia light auth read --p2p.network {{ celestia_network }} --node.store {{ da_home_dir }}
+  register: celestia_token
+  changed_when: false
+- name: Initialize rollappd
+  ansible.builtin.command: /usr/local/bin/rollappd init rpc --home {{ rollapp_home_dir }}
+  changed_when: false
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Retrieve genesis.json
+  ansible.builtin.get_url:
+    url: "{{ genesis_file_url }}"
+    dest: '{{ rollapp_home_dir }}/config/genesis.json'
+    mode: "0755"
+    force: true
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+- name: Set ROLLAPP_CHAIN_ID from genesis
+  ansible.builtin.command: jq -r .chain_id {{ rollapp_home_dir }}/config/genesis.json
+  register: rollapp_chain_id
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+  changed_when: false
+- name: Retrieve celestia-namespace-id
+  ansible.builtin.get_url:
+    url: "{{ celestia_namespace_file_url }}"
+    dest: '{{ ansible_env.HOME }}/celestia-namespace-id'
+    mode: "0755"
+- name: Extract celestia-namespace-id
+  ansible.builtin.command: cat {{ ansible_env.HOME }}/celestia-namespace-id
+  register: celestia_namespace_id
+  changed_when: false
+- name: Update configuration files
+  ansible.builtin.lineinfile:
+    path: '{{ rollapp_home_dir }}/config/dymint.toml'
+    regexp: '{{ item.regexp }}'
+    line: '{{ item.line }}'
+  loop:
+    - regexp: max_idle_time =.*
+      line: max_idle_time = "1h0m0s"
+    - regexp: max_proof_time =.*
+      line: max_proof_time = "10s"
+    - regexp: max_supported_batch_skew =.*
+      line: max_supported_batch_skew = 20
+    - regexp: rollapp_id =.*
+      line: rollapp_id = "{{ rollapp_chain_id.stdout }}"
+    - regexp: settlement_layer =.*
+      line: settlement_layer = "dymension"
+    - regexp: settlement_node_address =.*
+      line: settlement_node_address = "{{ hub_rpc_endpoint }}"
+    - regexp: settlement_gas_limit =.*
+      line: settlement_gas_limit = 0
+    - regexp: settlement_gas_prices =.*
+      line: settlement_gas_prices = "20000000000adym"
+    - regexp: settlement_gas_fees =.*
+      line: settlement_gas_fees = ""
+    - regexp: prometheus =.*
+      line: prometheus = true
+    - regexp: p2p_gossiped_blocks_cache_size .*
+      line: p2p_gossiped_blocks_cache_size = 500
+    - regexp: p2p_bootstrap_retry_time .*
+      line: p2p_bootstrap_retry_time = "30s"
+    - regexp: p2p_advertising_enabled.*
+      line: p2p_advertising_enabled = "false"
+    - regexp: p2p_listen_address.*
+      line: p2p_advertising_enabled = "/ip4/0.0.0.0/tcp/26656"
+    - regexp: da_layer =.*
+      line: da_layer = "celestia"
+    - regexp: namespace_id =.*
+      line: namespace_id = "{{ celestia_namespace_id.stdout }}"
+    - regexp: ^\s*da_config\s*=\s*".*"$
+      line: 'da_config = "{\"base_url\": \"http://localhost:26658\", \"timeout\": 60000000000, \"gas_prices\":1.0, \"gas_adjustment\": 1.3, \"namespace_id\": \"{{ celestia_namespace_id.stdout }}\", \"auth_token\": \"{{ celestia_token.stdout }}\"}"'
+  when: not rollapp_home_dir_status.stat.exists or not rollapp_home_dir_status.stat.isdir or (user_input.user_input | lower) in ['y', 'yes']
+#####################################################################################################
+# Create rollapp systemd service
+######################################################################################################
+- name: Create systemd service file
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/rollapp.service
+    content: |
+      [Unit]
+      Description=rollapp
+      After=network.target
+      [Service]
+      Type=simple
+      User=ubuntu
+      ExecStart=/usr/local/bin/rollappd start --home {{ rollapp_home_dir }}
+      Restart=on-failure
+      RestartSec=10
+      LimitNOFILE=65535
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+- name: Enable stopped rollapp service
+  ansible.builtin.systemd:
+    name: rollapp
+    enabled: true
+    state: stopped
+- name: Retrieve dymint node id
+  ansible.builtin.command: /usr/local/bin/rollappd dymint show-node-id --home {{ rollapp_home_dir }}
+  register: dymint_node_id
+  changed_when: false
+- name: Print values for manual steps and network updates
+  ansible.builtin.debug:
+    msg:
+      - "Celestia namespace id: {{ celestia_namespace_id.stdout }}"
+      - "Dymint node id: {{ dymint_node_id.stdout }}"
+      - "Node public IP: {{ ansible_host }}"
+      - "Follow the manual steps to use these"

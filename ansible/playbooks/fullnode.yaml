@@ -1,0 +1,69 @@
+- name: Install common packages on full nodes
+  hosts: full_nodes
+  tags: always
+  become: true
+  vars:
+    ansible_ssh_private_key_file: "{{ ssh_key_path }}"
+    ansible_ssh_user: ubuntu
+    host_key_checking: false
+  vars_files:
+    - ../vars/common.yaml
+    - ../vars/definable.yaml
+  tasks:
+    - name: Include common tasks
+      ansible.builtin.include_tasks: ../tasks/common/generic.yaml
+    - name: Ensure Go is v{{ go_version }}
+      ansible.builtin.include_tasks: ../tasks/common/install_go.yaml
+- name: Install Celestia binaries and set up systemd service for da
+  hosts: full_nodes
+  tags: celestia
+  become: true
+  vars:
+    ansible_ssh_private_key_file: "{{ ssh_key_path }}"
+    ansible_ssh_user: ubuntu
+    host_key_checking: false
+  vars_files:
+    - ../vars/common.yaml
+    - ../vars/definable.yaml
+    - ../vars/celestia.yaml
+  tasks:
+    - name: Install Celestia Node binaries (celestia & cel-key) {{ celestia_app_version }}
+      ansible.builtin.include_tasks: ../tasks/celestia/node.yaml
+    - name: Install Celestia App binary (celestia-app) {{ celestia_app_version }}
+      ansible.builtin.include_tasks: ../tasks/celestia/app.yaml
+    - name: Initialize celestia light node
+      ansible.builtin.include_tasks: ../tasks/celestia/light_client.yaml
+- name: Install dymd binary on full nodes
+  hosts: full_nodes
+  tags: dymd
+  become: true
+  vars:
+    ansible_ssh_private_key_file: /Users/artemijspavlovs/.config/local/work/id_rsa
+    ansible_ssh_user: ubuntu
+    host_key_checking: false
+  vars_files:
+    - ../vars/common.yaml
+    - ../vars/definable.yaml
+    - ../vars/dymd.yaml
+  tasks:
+    - name: Install Dymension binaries (dymd) {{ dymd_version }}
+      ansible.builtin.include_tasks: ../tasks/dymd/dymd.yaml
+- name: Install rollapp binary on full nodes
+  hosts: full_nodes
+  tags: rollapp
+  become: true
+  vars_files:
+    - ../vars/common.yaml
+    - ../vars/definable.yaml
+    - ../vars/rollapp.yaml
+    - ../vars/dymd.yaml
+    - ../vars/celestia.yaml
+  vars:
+    ansible_ssh_private_key_file: "{{ ssh_key_path }}"
+    ansible_ssh_user: ubuntu
+    host_key_checking: false
+  tasks:
+    - name: Install RollApp binaries (rollappd) {{ rollapp_version }}
+      ansible.builtin.include_tasks: ../tasks/rollapp/rollapp.yaml
+    - name: Configure rollapp
+      ansible.builtin.include_tasks: ../tasks/rollapp/init.yaml

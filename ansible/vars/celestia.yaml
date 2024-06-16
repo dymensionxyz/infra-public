@@ -1,0 +1,6 @@
+celestia_node_repository_url: https://github.com/celestiaorg/celestia-node.git
+celestia_app_repository_url: https://github.com/celestiaorg/celestia-app.git
+celestia_repo_clone_dir: /tmp/celestia
+# light client configuration
+da_home_dir: '/etc/da'
+celestia_os_user: da

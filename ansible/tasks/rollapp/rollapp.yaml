@@ -1,0 +1,37 @@
+- name: Check rollapp binary
+  ansible.builtin.command: which rollappd
+  register: is_rollappd_installed
+  ignore_errors: true
+  changed_when: false
+  failed_when: is_rollappd_installed.rc != 0
+- name: Clone the EVM repository at tag ({{ rollapp_version }})
+  ansible.builtin.git:
+    repo: '{{ evm_rollapp_repository_url }}'
+    dest: '{{ rollapp_repo_clone_dir }}'
+    version: '{{ rollapp_version }}'
+    clone: true
+    update: true
+  when: rollapp_type == "evm" and rollapp_version != "latest" and is_rollappd_installed.rc != 0
+## wasm
+- name: Clone the WASM repository at a specific tag
+  ansible.builtin.git:
+    repo: '{{ wasm_rollapp_repository_url }}'
+    dest: '{{ rollapp_repo_clone_dir }}'
+    version: '{{ rollapp_version }}'
+    clone: true
+    update: true
+  when: rollapp_type == "wasm" and rollapp_version != "latest" and is_rollappd_installed.rc != 0
+## install the binary
+- name: Build the binary
+  ansible.builtin.command:
+    cmd: make build BECH32_PREFIX={{ bech_prefix }}
+    chdir: '{{ rollapp_repo_clone_dir }}'
+  changed_when: false
+  when: is_rollappd_installed.rc != 0
+- name: Move the binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: '{{ rollapp_repo_clone_dir }}/build/rollapp-evm'
+    dest: /usr/local/bin/rollappd
+    remote_src: true
+    mode: "0755"
+  when: is_rollappd_installed.rc != 0

@@ -1,0 +1,47 @@
+- name: Check dymd binary
+  ansible.builtin.command: which dymd
+  register: is_dymd_installed
+  ignore_errors: true
+  changed_when: false
+# version
+- name: Check Dymension App version
+  ansible.builtin.command: dymd version
+  register: dymd_version_output
+  ignore_errors: true
+  changed_when: false
+  when: is_dymd_installed.rc == 0
+- name: Extract Dymension semantic version
+  ansible.builtin.set_fact:
+    dymd_semantic_version: "{{ dymd_version_output.stdout | default('not installed') }}"
+- name: Show the Dymension version info
+  ansible.builtin.debug:
+    msg: "dymd version want: {{ dymd_version }}, have: {{ dymd_semantic_version }}"
+# installation
+- name: Remove the old dymd path
+  ansible.builtin.file:
+    path: '{{ dymd_repo_clone_dir }}/dymd'
+    state: absent
+  become: true
+  become_method: ansible.builtin.sudo
+  when: dymd_version != dymd_semantic_version or is_dymd_installed.rc != 0
+- name: Clone the dymd repository at tag ({{ dymd_version }})
+  ansible.builtin.git:
+    repo: '{{ dymd_repository_url }}'
+    dest: '{{ dymd_repo_clone_dir }}/dymd'
+    version: '{{ dymd_version }}'
+    clone: true
+    update: true
+  when: dymd_version != dymd_semantic_version or is_dymd_installed.rc != 0
+- name: Build the dymd binary
+  ansible.builtin.command:
+    cmd: make build
+    chdir: '{{ dymd_repo_clone_dir }}/dymd'
+  when: dymd_version != dymd_semantic_version or is_dymd_installed.rc != 0
+  changed_when: false
+- name: Move the binary to /usr/local/bin
+  ansible.builtin.copy:
+    src: '{{ dymd_repo_clone_dir }}/dymd/build/dymd'
+    dest: /usr/local/bin/dymd
+    remote_src: true
+    mode: "0755"
+  when: dymd_version != dymd_semantic_version or is_dymd_installed.rc != 0

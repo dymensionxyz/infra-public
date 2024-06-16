@@ -1,0 +1,14 @@
+go_version: 1.22.1
+cpu_architecture: arm64
+go_archive_name: go{{ go_version }}.linux-{{ cpu_architecture }}.tar.gz
+go_install_dir: /usr/local
+go_download_url: https://go.dev/dl/{{ go_archive_name }}
+common_packages:
+  - build-essential
+  - net-tools
+  - jq
+  - s3cmd
+  - acl
+  - unzip
+  - expect
+  - lz4

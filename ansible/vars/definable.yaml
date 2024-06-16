@@ -1,0 +1,23 @@
+ssh_key_path: <path-to-your-ssh-key>
+bech_prefix: <rollapp-bech32-prefix> # bech prefix used to build the rollapp binary
+# Rollapp
+rollapp_version: v2.2.0
+rollapp_type: evm
+genesis_file_url: <genesis-file-url>
+celestia_namespace_file_url: <celestia-namespace-id-url>
+# Dymension Hub
+dymd_version: v3.1.0
+## blumbus testnet
+hub_rpc_endpoint: https://rpc-blumbus.mzonder.com:443
+hub_chain_id: blumbus_111-1
+## mainnet
+# hub_rpc_endpoint: https://rpc-dymension.mzonder.com:443
+# hub_chain_id: dymension_1100-1
+
+# Celestia
+celestia_node_version: v0.13.4
+celestia_app_version: v1.11.0
+# Arabica testnet
+celestia_network: arabica
+# mainnet
+# celestia_network: celestia
