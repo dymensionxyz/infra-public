@@ -142,7 +142,7 @@
     - regexp: p2p_bootstrap_retry_time .*
       line: p2p_bootstrap_retry_time = "30s"
     - regexp: p2p_advertising_enabled.*
-      line: p2p_advertising_enabled = "false"
+      line: p2p_advertising_enabled = "true"
     - regexp: p2p_listen_address.*
       line: p2p_advertising_enabled = "/ip4/0.0.0.0/tcp/26656"
     - regexp: da_layer =.*
